@@ -2,80 +2,96 @@ import numpy as np
 import zarr
 import time
 import os
-
-# Import the class you defined in Step 1
+import argparse
 from env.sim_env import StackingEnv
-# Import the expert planner
 from expert.motion_planner import StackingExpert
 
 def main():
-    # 1. Initialize Headless Environment (gui=False for server)
-    env = StackingEnv(gui=False)
+    # 1. Parse Arguments
+    parser = argparse.ArgumentParser(description="Generate demonstration data for Stacking Task")
     
-    # 2. Initialize Expert
+    # Flag: Save Images? (True/False)
+    parser.add_argument('--visual', action='store_true', help="Save camera images for visual policy training")
+    
+    # Flag: Number of Episodes (Int)
+    parser.add_argument('--num_episodes', type=int, default=50, help="Number of episodes to generate (Default: 50)")
+    
+    args = parser.parse_args()
+    
+    SAVE_VISUAL = args.visual
+    NUM_EPISODES = args.num_episodes
+    
+    # 2. Init Env
+    env = StackingEnv(gui=False)
     expert = StackingExpert(env)
     
-    # 3. Setup Output File
-    output_path = 'data/stacking_demo.zarr'
-    # Ensure data directory exists
+    # 3. Setup Output
     os.makedirs('data', exist_ok=True)
-    
-    # mode='w' overwrites previous data so you get a clean start
+    output_path = 'data/stacking_demo.zarr'
     root = zarr.open_group(output_path, mode='w')
     
-    print(f"--- Starting Data Collection for {output_path} ---")
+    print(f"--- Starting Data Collection ---")
+    print(f"    Target File: {output_path}")
+    print(f"    Episodes:    {NUM_EPISODES}")
+    print(f"    Visual Mode: {'ON 📸' if SAVE_VISUAL else 'OFF ❌ (State only)'}")
     
-    # Lists to store data
+    # Storage
     all_obs = []
     all_actions = []
+    all_images = [] 
     episode_ends = []
     
-    num_episodes = 5 
-    
-    for ep in range(num_episodes):
-        print(f"Episode {ep+1}/{num_episodes} Start...")
+    for ep in range(NUM_EPISODES):
+        print(f"Episode {ep+1}/{NUM_EPISODES} Start...")
         
-        # Reset env (this triggers your safe random spawning)
         env.reset()
-        
-        # Expert plans the trajectory
         expert_actions = expert.generate_episode()
         
         if len(expert_actions) == 0:
-            print("⚠️ Warning: Expert generated 0 steps. Skipping.")
+            print("⚠️ Warning: Expert generated 0 steps.")
             continue
 
-        # Execute the plan in the environment
         for action in expert_actions:
             obs = env.step(action)
             
-            # Flatten Observation for Diffusion Policy
-            # Obs = [Robot Joints (7)] + [Cube 1 Pos/Orn (7)] + [Cube 2...] + [Cube 3...]
-            # Total Dim = 7 + 21 = 28
+            # 1. Save State Data (Always)
             flat_cubes = np.array(obs['cubes']).flatten()
             flat_obs = np.concatenate([obs['robot'], flat_cubes])
-            
             all_obs.append(flat_obs)
             all_actions.append(action)
+            
+            # 2. Save Visual Data (Conditional)
+            if SAVE_VISUAL:
+                img = env.get_image()
+                all_images.append(img)
 
-        # Mark the end of this episode
         episode_ends.append(len(all_actions))
         
         if (ep+1) % 10 == 0:
             print(f"✅ Completed {ep+1} episodes.")
 
-    # 4. Save Arrays to Zarr
+    # 4. Save to Zarr
     print("Saving to disk...")
     root.create_group('data')
     root.create_group('meta')
     
-    # Compress and save
+    # Save State & Actions
     root['data/action'] = np.array(all_actions, dtype=np.float32)
     root['data/state'] = np.array(all_obs, dtype=np.float32)
     root['meta/episode_ends'] = np.array(episode_ends, dtype=np.int32)
     
-    print(f"🎉 Success! Total steps collected: {len(all_actions)}")
+    # Save Images (If enabled)
+    if SAVE_VISUAL:
+        print(f"    Compressing {len(all_images)} images (this may take a moment)...")
+        root.create_dataset(
+            'data/img', 
+            data=np.array(all_images, dtype=np.uint8), 
+            chunks=(100, 96, 96, 3),
+            compressor=zarr.Blosc(cname='zstd', clevel=3, shuffle=2)
+        )
+        print("    Images saved to data/img")
+    
+    print(f"🎉 Success! Total steps: {len(all_actions)}")
 
-# --- ENTRY POINT (Crucial!) ---
 if __name__ == "__main__":
     main()

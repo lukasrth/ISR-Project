@@ -8,17 +8,13 @@ This repository contains the simulation environment and data generation pipeline
 
 ```text
 ISR-Project/
-├── assets/                  # Robot and Object URDFs
-│   ├── cube_large.urdf
-│   ├── cube_medium.urdf
-│   ├── cube_small.urdf
-│   └── table.urdf
-├── data/                    # Generated .zarr datasets (ignored by git)
+├── data/                    # Generated .zarr datasets (created automatically)
 ├── env/                     # PyBullet Environment wrapper
-│   └── sim_env.py
-├── expert/                  # Motion Planner (PyRoki/IK)
-│   └── motion_planner.py
-├── generate_data.py         # Main script to collect demonstrations
+│   └── sim_env.py           # Simulation logic, procedural generation, & sensor wrappers
+├── expert/                  # Motion Planner
+│   └── motion_planner.py    # Inverse Kinematics & Trajectory Generation
+├── generate_data.py         # Main CLI script to collect demonstrations
+├── save_replay_video.py     # Utility to verify data validity (renders mp4)
 ├── requirements.txt         # Dependencies
 └── README.md
 ```
@@ -63,21 +59,9 @@ python -c 'import pybullet; import pyroki; import torch; print("Setup Complete!"
 
 ## Generating Expert Data
 
-To train the Diffusion Policy, we first need a dataset of expert demonstrations. This pipeline uses a scripted expert (Finite State Machine) to generate "perfect" stacking trajectories.
+To train the Diffusion Policy, we generate a dataset of expert demonstrations. The pipeline uses a scripted expert to move the robot while recording State (joint angles, object positions) and optionally Vision (camera images).
 
-### 1. Configure the Environment
-
-Place the URDF files in the assets/ folder. The data collection script expects these filenames and sizes:
-
-- assets/cube_large.urdf — 5 cm edge (0.05 m)
-- assets/cube_medium.urdf — 4 cm edge (0.04 m)
-- assets/cube_small.urdf — 3 cm edge (0.03 m)
-
-
-
-
-
-### 2. Run Data Collection
+### 1.  Run Data Collection
 
 Execute the generation script. This will launch a PyBullet GUI (optional) and save the trajectories.
 
@@ -85,19 +69,26 @@ Execute the generation script. This will launch a PyBullet GUI (optional) and sa
 python generate_data.py
 ```
 
+- Flag with --num_episodes to modify the number of expert runs (default 50)
+- Flag with --visual to save images for realistic training  
 - GUI Mode: By default, the script runs with gui=True so you can watch the robot.
-
 - Headless Mode: To generate data faster, edit generate_data.py and set gui=False in the StackingEnv initialization.
 
-### 3. Output
+### 2. Output
 
-The script produces a Zarr file located at: data/stacking_demo.zarr
+The script produces a Zarr file located at data/stacking_demo.zarr.
 
-This file contains:
+File Structure:
 
--  data/action: Joint positions/velocities and gripper state.
--  data/state: Robot joint angles and cube positions.
--  meta/episode_ends: Indices separating valid episodes.
+```text
+data/stacking_demo.zarr/
+├── data/
+│   ├── action          (Shape: [N, 8])   # 7 Joint Positions + 1 Gripper State
+│   ├── state           (Shape: [N, 28])  # 7 Robot Joints + 21 Cube Pos/Orn
+│   └── img             (Shape: [N, 96, 96, 3])  # (Optional) RGB Frames
+└── meta/
+    └── episode_ends    (Shape: [Num_Episodes])  # Indices marking end of trajectories
+```
 
 You can check the output with inspect_data.py and replay_data.py to data assessing and visual inspection. 
 
@@ -105,14 +96,18 @@ You can check the output with inspect_data.py and replay_data.py to data assessi
 
 Once data/stacking_demo.zarr is generated:
 
-- Clone the Diffusion Policy repository.
--  Create a configuration file (YAML) that points to your data/stacking_demo.zarr path.
-- Run the training script. You do not need to run PyBullet during training.
-- The policy will learn to map the state observations directly to actions.
+Next Steps: Training
+
+1.  Clone the Diffusion Policy repository.
+
+2.   Create a configuration file (YAML) pointing to your data/stacking_demo.zarr.
+
+3.   For State Policy: Use data/state (28-dim) as input.
+
+4.   For Visual Policy: Use data/img (96x96x3) + data/state (7-dim robot joints) as input.
 
 ## Troubleshooting
 
-- Missing URDFs: If PyBullet crashes, check that the assets/ folder contains valid URDF files for the cubes.
 - JAX/CUDA errors: If you have GPU conflicts between JAX and PyTorch, you can force JAX to use CPU only (sufficient for kinematics) by running:
 ```Bash
 export JAX_PLATFORM_NAME=cpu
