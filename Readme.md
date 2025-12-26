@@ -7,7 +7,7 @@ This repository contains the simulation environment and data generation pipeline
 ## 📂 Project Structure
 
 ```text
-isr_stacking/
+ISR-Project/
 ├── assets/                  # Robot and Object URDFs
 │   ├── cube_large.urdf
 │   ├── cube_medium.urdf
@@ -26,7 +26,7 @@ isr_stacking/
 
 We use Conda to manage the Python environment. This setup ensures compatibility between the JAX-based kinematics (PyRoki) and PyTorch-based training.
 
-# 1. Create the conda Environment
+### 1. Create the conda Environment
 
 We recommend Python 3.9, which is the standard stable version for Diffusion Policy and PyBullet.
 
@@ -36,13 +36,13 @@ We recommend Python 3.9, which is the standard stable version for Diffusion Poli
 eval "$(conda shell.bash hook)"
 
 # Create the conda environment
-conda create -n isr_stacking python=3.9 -y
+conda create -n ISR_Project python=3.10 -y
 
 # Activate the environment
-conda activate isr_stacking
+conda activate ISR_Project
 ```
 
-# 2. Install Dependencies 
+### 2. Install Dependencies 
 
 
 ```bash
@@ -54,18 +54,18 @@ pip install -r requirements.txt
 ```
 Note for PyRoki: The requirements.txt installs PyRoki directly from GitHub. Ensure you have git installed on your system. If the install fails, verify your JAX installation matches your OS (Linux/macOS/Windows).
 
-# 3 Verify Installation
+### 3 Verify Installation
 
 ```bash
 # Run a quick Python command to verify installation
-python -c "import pybullet; import pyroki; import torch; print('Setup Complete!')"
+python -c 'import pybullet; import pyroki; import torch; print("Setup Complete!")'
 ```
 
 ## Generating Expert Data
 
 To train the Diffusion Policy, we first need a dataset of expert demonstrations. This pipeline uses a scripted expert (Finite State Machine) to generate "perfect" stacking trajectories.
 
-# 1. Configure the Environment
+### 1. Configure the Environment
 
 Place the URDF files in the assets/ folder. The data collection script expects these filenames and sizes:
 
@@ -77,7 +77,7 @@ Place the URDF files in the assets/ folder. The data collection script expects t
 
 
 
-# 2. Run Data Collection
+### 2. Run Data Collection
 
 Execute the generation script. This will launch a PyBullet GUI (optional) and save the trajectories.
 
@@ -89,17 +89,17 @@ python generate_data.py
 
 - Headless Mode: To generate data faster, edit generate_data.py and set gui=False in the StackingEnv initialization.
 
-# 3. Output
+### 3. Output
 
 The script produces a Zarr file located at: data/stacking_demo.zarr
 
 This file contains:
 
-    data/action: Joint positions/velocities and gripper state.
+-  data/action: Joint positions/velocities and gripper state.
+-  data/state: Robot joint angles and cube positions.
+-  meta/episode_ends: Indices separating valid episodes.
 
-    data/state: Robot joint angles and cube positions.
-
-    meta/episode_ends: Indices separating valid episodes.
+You can check the output with inspect_data.py and replay_data.py to data assessing and visual inspection. 
 
 ## Next Steps: Training
 
