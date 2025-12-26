@@ -1,0 +1,21 @@
+# Simulation & Physics
+pybullet>=3.2.5
+numpy>=1.24.0
+
+# Kinematics (PyRoki)
+# Note: PyRoki relies on JAX. We install CPU versions for the generator to be safe.
+jax>=0.4.13
+jaxlib>=0.4.13
+# Install PyRoki from source (ensure you have git installed)
+pyroki @ git+https://github.com/chungmin99/pyroki.git
+
+# Data Storage (Diffusion Policy format)
+zarr>=2.16.0
+h5py>=3.9.0
+opencv-python>=4.8.0
+
+# Future Training Compatibility (Diffusion Policy)
+torch>=2.0.0
+diffusers>=0.18.0
+tqdm
+hydra-core>=1.3.0

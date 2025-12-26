@@ -1,0 +1,18 @@
+# --- ISR Project Specific ---
+# Ignore generated datasets (Large files)
+data/*.zarr
+data/*.hdf5
+
+# Ignore local environment (if you made one locally)
+venv/
+env/
+
+# --- Python Standard ---
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# --- IDE Settings (Optional) ---
+.vscode/
+.idea/
+.DS_Store
