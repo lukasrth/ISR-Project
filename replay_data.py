@@ -4,6 +4,21 @@ import pybullet_data
 import numpy as np
 import cv2
 
+# --- CONFIG ---
+# Map sizes to the colors used in SimEnv
+# 0.05 -> Red, 0.04 -> Green, 0.03 -> Blue
+SIZE_TO_COLOR = {
+    0.05: [1, 0, 0, 1],
+    0.04: [0, 1, 0, 1],
+    0.03: [0, 0, 1, 1]
+}
+
+def get_color_for_size(size_val):
+    # Find closest key in case of tiny floating point differences
+    # e.g. 0.0499999 -> 0.05
+    closest_size = min(SIZE_TO_COLOR.keys(), key=lambda x: abs(x - size_val))
+    return SIZE_TO_COLOR[closest_size]
+
 # 1. Load Data
 try:
     dataset = zarr.open('data/stacking_demo.zarr', mode='r')
@@ -18,29 +33,10 @@ except Exception as e:
 if len(episode_ends) == 0:
     print("Dataset is empty.")
     exit()
+
 start_idx = 0 if len(episode_ends) == 1 else episode_ends[-2]
 end_idx = episode_ends[-1]
-
-# --- CRITICAL DEBUG: CHECK DATA BEFORE RENDERING ---
-print(f"\n🔍 DEBUGGING FRAME {start_idx} (First frame of replay)")
 first_frame = states[start_idx]
-# Robot: 0-7
-# Cube 0: 7-14
-# Cube 1: 14-21
-# Cube 2: 21-28
-c0_pos = first_frame[7:10]
-c1_pos = first_frame[14:17]
-c2_pos = first_frame[21:24]
-
-print(f"   🔴 Cube 0 (Red)   Pos: {np.round(c0_pos, 3)}")
-print(f"   🟢 Cube 1 (Green) Pos: {np.round(c1_pos, 3)}")
-print(f"   🔵 Cube 2 (Blue)  Pos: {np.round(c2_pos, 3)}")
-
-if np.linalg.norm(c1_pos) < 0.01:
-    print("   ⚠️ WARNING: Cube 1 is at (0,0,0). The DATA generation might be failing.")
-else:
-    print("   ✅ Coordinates look valid. Proceeding to render.")
-# ---------------------------------------------------
 
 # 2. Setup Sim
 p.connect(p.DIRECT) 
@@ -51,27 +47,42 @@ p.loadURDF("plane.urdf")
 p.loadURDF("table/table.urdf", basePosition=[0.5, 0, -0.63])
 robot = p.loadURDF("franka_panda/panda.urdf", useFixedBase=True)
 
-# 3. Setup Ghosts
+# 3. Dynamic Cube Setup
 cube_visuals = []
-colors = [[1,0,0,1], [0,1,0,1], [0,0,1,1]]
-sizes = [0.05, 0.04, 0.03]
 
+print(f"\n🔍 Analyzing Episode Structure (Start Frame: {start_idx})")
+
+# We loop 3 times (for 3 cubes)
 for i in range(3):
-    vis = p.createVisualShape(p.GEOM_BOX, halfExtents=[sizes[i]/2]*3, rgbaColor=colors[i])
-    body = p.createMultiBody(baseVisualShapeIndex=vis)
+    # Calculate index in the state vector
+    # 7 (Robot) + i * 8 (Stride) -> 8 is the new size (7 pos/orn + 1 size)
+    base_idx = 7 + (i * 8)
+    
+    # Read Position (Indices 0-3 of the chunk)
+    pos = first_frame[base_idx : base_idx+3]
+    
+    # Read Size (Index 7 of the chunk)
+    size = first_frame[base_idx + 7]
+    
+    color = get_color_for_size(size)
+    print(f"   Cube {i}: Size={size:.3f} -> Color={color}")
+
+    # Create Visual
+    vis = p.createVisualShape(p.GEOM_BOX, halfExtents=[size/2]*3, rgbaColor=color)
+    body = p.createMultiBody(baseVisualShapeIndex=vis, basePosition=pos)
     cube_visuals.append(body)
 
 # 4. Video Setup
 width, height = 640, 480
 view_matrix = p.computeViewMatrix(
-    cameraEyePosition=[1.0, -0.5, 0.8], # High angle side view
+    cameraEyePosition=[1.0, -0.5, 0.8], 
     cameraTargetPosition=[0.5, 0, 0.0],   
     cameraUpVector=[0, 0, 1]
 )
 proj_matrix = p.computeProjectionMatrixFOV(60, width/height, 0.1, 100)
 video_writer = cv2.VideoWriter('replay.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 20.0, (width, height))
 
-print(f"\n🎥 Rendering {end_idx - start_idx} frames to replay.mp4...")
+print(f"🎥 Rendering {end_idx - start_idx} frames...")
 
 for i in range(start_idx, end_idx):
     current_state = states[i]
@@ -80,15 +91,18 @@ for i in range(start_idx, end_idx):
     for j in range(7):
         p.resetJointState(robot, j, current_state[j])
         
-    # Update Cubes (FIXED INDEXING)
-    # Stride is 7 (3 pos + 4 orn)
+    # Update Cubes
     for c_idx in range(3):
-        idx_start = 7 + (c_idx * 7)
+        # STRIDE IS 8 (Pos[3] + Orn[4] + Size[1])
+        idx_start = 7 + (c_idx * 8)
+        
         pos = current_state[idx_start : idx_start+3]
         orn = current_state[idx_start+3 : idx_start+7]
+        # We ignore index+7 (Size) here because size doesn't change mid-video
+        
         p.resetBasePositionAndOrientation(cube_visuals[c_idx], pos, orn)
 
-    # Gripper
+    # Update Gripper
     gripper_val = actions[i][-1] * 0.04
     p.resetJointState(robot, 9, gripper_val)
     p.resetJointState(robot, 10, gripper_val)
@@ -100,4 +114,4 @@ for i in range(start_idx, end_idx):
 
 video_writer.release()
 p.disconnect()
-print("✅ Done.")
+print("✅ Done. Check replay.mp4")

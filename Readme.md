@@ -84,7 +84,7 @@ File Structure:
 data/stacking_demo.zarr/
 ├── data/
 │   ├── action          (Shape: [N, 8])   # 7 Joint Positions + 1 Gripper State
-│   ├── state           (Shape: [N, 28])  # 7 Robot Joints + 21 Cube Pos/Orn
+│   ├── state           (Shape: [N, 31])  # 7 Robot Joints + 21 Cube Pos/Orn
 │   └── img             (Shape: [N, 96, 96, 3])  # (Optional) RGB Frames
 └── meta/
     └── episode_ends    (Shape: [Num_Episodes])  # Indices marking end of trajectories
@@ -102,7 +102,7 @@ Next Steps: Training
 
 2.   Create a configuration file (YAML) pointing to your data/stacking_demo.zarr.
 
-3.   For State Policy: Use data/state (28-dim) as input.
+3.   For State Policy: Use data/state (31-dim) as input.
 
 4.   For Visual Policy: Use data/img (96x96x3) + data/state (7-dim robot joints) as input.
 
