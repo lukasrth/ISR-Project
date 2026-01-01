@@ -5,7 +5,6 @@ data/*.hdf5
 
 # Ignore local environment (if you made one locally)
 venv/
-env/
 
 # --- Python Standard ---
 __pycache__/
