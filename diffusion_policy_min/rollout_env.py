@@ -58,9 +58,16 @@ def main():
 
         # ---- denormalize & execute first action ----
         act_seq = act_seq_norm * act_std + act_mean
-        action = act_seq[0]
+        # keep track of previous action
+        if step == 0:
+            a_prev = env.get_current_action()  # or zeros if unavailable
+
+        delta = act_seq[0]
+        action = a_prev + delta
 
         obs, reward, done, info = env.step(action)
+        a_prev = action
+
         obs_hist.append(obs)
 
         step += 1

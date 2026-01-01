@@ -59,7 +59,24 @@ class ZarrSequenceDataset:
         t = self.valid[idx]  # [B]
 
         obs_seq = np.stack([self.states[ti - self.obs_h + 1: ti + 1] for ti in t], axis=0)
-        act_seq = np.stack([self.actions[ti: ti + self.act_h] for ti in t], axis=0)
+        # absolute actions
+        act_abs = np.stack(
+            [self.actions[ti: ti + self.act_h] for ti in t],
+            axis=0
+        )  # [B, L, act_dim]
+
+        # previous action (a_{t-1}), repeated
+        a_prev = self.actions[t - 1]           # [B, act_dim]
+        a_prev = a_prev[:, None, :]             # [B, 1, act_dim]
+
+        # prepend a_{t-1} to compute deltas
+        act_prev_seq = np.concatenate(
+            [a_prev, act_abs[:, :-1]],
+            axis=1
+        )
+
+        # relative action
+        act_seq = act_abs - act_prev_seq
 
         # normalize
         obs_seq = (obs_seq - self.state_mean) / self.state_std
